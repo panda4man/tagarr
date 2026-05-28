@@ -62,19 +62,29 @@ logging:
 
 At least one of `plex:` or `jellyfin:` must be configured (with both `url` and the matching credential). Startup fails otherwise.
 
-Env vars (override config values):
+Env vars (override config values). Every YAML knob has an env override — in normal operation you should only need to edit env, not `config.yaml`.
 
-| Var                 | Purpose                                              |
-| ------------------- | ---------------------------------------------------- |
-| `PLEX_URL`          | Plex server base URL                                 |
-| `PLEX_TOKEN`        | Plex auth token                                      |
-| `JELLYFIN_URL`      | Jellyfin server base URL                             |
-| `JELLYFIN_API_KEY`  | Jellyfin API key                                     |
-| `CONFIG_PATH`       | Path to YAML config (default `/config/config.yaml`)  |
-| `LOG_LEVEL`         | Override log level                                   |
-| `WEBHOOK_TOKEN`     | If set, webhook paths become `/webhook/<backend>/<token>` (and the legacy Plex alias becomes `/webhook/<token>`) |
-| `BIND_HOST`         | Listen host (default `0.0.0.0`)                      |
-| `BIND_PORT`         | Listen port (default `8080`)                         |
+| Var                  | Purpose                                              |
+| -------------------- | ---------------------------------------------------- |
+| `LABELS`             | JSON array of strings, e.g. `'["auto-labeled","needs-review"]'` |
+| `PLEX_URL`           | Plex server base URL                                 |
+| `PLEX_TOKEN`         | Plex auth token                                      |
+| `PLEX_LIBRARY_TYPES` | JSON array, e.g. `'["movie","show"]'` (default `["movie","show"]`) |
+| `JELLYFIN_URL`       | Jellyfin server base URL                             |
+| `JELLYFIN_API_KEY`   | Jellyfin API key                                     |
+| `JELLYFIN_ITEM_TYPES`| JSON array, e.g. `'["Movie","Episode","Series"]'` (default `["Movie","Episode","Series"]`) |
+| `CONFIG_PATH`        | Path to YAML config (default `/config/config.yaml`)  |
+| `LOG_LEVEL`          | Override log level                                   |
+| `LOG_FILE`           | Log file path (default `/var/log/tagarr/app.log`)    |
+| `LOG_MAX_BYTES`      | Max log file size in bytes before rotation (default `5242880`) |
+| `LOG_BACKUP_COUNT`   | Number of rotated log backups to keep (default `5`)  |
+| `WEBHOOK_TOKEN`      | If set, webhook paths become `/webhook/<backend>/<token>` (and the legacy Plex alias becomes `/webhook/<token>`) |
+| `BIND_HOST`          | Listen host (default `0.0.0.0`)                      |
+| `BIND_PORT`          | Listen port (default `8080`)                         |
+
+JSON-array env vars must parse to a list of strings, e.g. `LABELS='["a","b"]'`. Invalid JSON or non-string elements cause a startup error.
+
+`labels` must be set somewhere — either in YAML or via `LABELS`. Everything else falls back to the defaults above.
 
 ## Endpoints
 

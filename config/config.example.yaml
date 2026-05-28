@@ -1,24 +1,28 @@
-labels:
+# Every key here can be overridden by an env var (see README).
+# In normal operation, prefer setting env vars and leaving this file alone.
+# Only `labels` is required somewhere (here or via LABELS env var).
+
+labels:                            # LABELS env var (JSON array) overrides
   - "auto-labeled"
   - "needs-review"
 
 plex:                              # remove this section if not using Plex
-  url: "http://plex.local:32400"
-  token: "REPLACE_ME_OR_USE_PLEX_TOKEN_ENV"
-  library_types:
+  url: "http://plex.local:32400"   # PLEX_URL env var overrides
+  token: "REPLACE_ME_OR_USE_PLEX_TOKEN_ENV"  # PLEX_TOKEN env var overrides
+  library_types:                   # PLEX_LIBRARY_TYPES env var (JSON array) overrides
     - movie
     - show
 
 jellyfin:                          # remove this section if not using Jellyfin
-  url: "http://jellyfin.local:8096"
-  api_key: "REPLACE_ME_OR_USE_JELLYFIN_API_KEY_ENV"
-  item_types:
+  url: "http://jellyfin.local:8096"            # JELLYFIN_URL env var overrides
+  api_key: "REPLACE_ME_OR_USE_JELLYFIN_API_KEY_ENV"  # JELLYFIN_API_KEY env var overrides
+  item_types:                      # JELLYFIN_ITEM_TYPES env var (JSON array) overrides
     - Movie
     - Episode
     - Series
 
 logging:
-  level: INFO
-  file: /var/log/tagarr/app.log
-  max_bytes: 5242880
-  backup_count: 5
+  level: INFO                      # LOG_LEVEL env var overrides
+  file: /var/log/tagarr/app.log    # LOG_FILE env var overrides
+  max_bytes: 5242880               # LOG_MAX_BYTES env var overrides
+  backup_count: 5                  # LOG_BACKUP_COUNT env var overrides

@@ -1,3 +1,4 @@
+import json
 import os
 from dataclasses import dataclass, field
 
@@ -35,43 +36,90 @@ class AppConfig:
     jellyfin: JellyfinConfig | None = None
 
 
+def _env(name: str) -> str | None:
+    val = os.environ.get(name)
+    if val is None or val == "":
+        return None
+    return val
+
+
+def _env_str_list(name: str) -> list[str] | None:
+    raw = _env(name)
+    if raw is None:
+        return None
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{name} must be a JSON array of strings") from exc
+    if not isinstance(parsed, list) or not all(isinstance(x, str) for x in parsed):
+        raise ValueError(f"{name} must be a JSON array of strings")
+    return parsed
+
+
+def _resolve_int(env_name: str, yaml_value, default: int) -> int:
+    raw = _env(env_name)
+    if raw is not None:
+        try:
+            return int(raw)
+        except ValueError as exc:
+            raise ValueError(f"{env_name} must be an integer") from exc
+    if yaml_value is not None:
+        return int(yaml_value)
+    return default
+
+
+def _resolve_str_list(env_name: str, yaml_value, default: list[str] | None) -> list[str] | None:
+    from_env = _env_str_list(env_name)
+    if from_env is not None:
+        return from_env
+    if yaml_value is not None:
+        if not isinstance(yaml_value, list) or not all(isinstance(x, str) for x in yaml_value):
+            raise ValueError(f"{env_name.lower()} must be a list of strings")
+        return yaml_value
+    return default
+
+
 def load_config(path: str | None = None) -> AppConfig:
     path = path or os.environ.get("CONFIG_PATH", "/config/config.yaml")
     with open(path, "r", encoding="utf-8") as f:
         raw = yaml.safe_load(f) or {}
 
-    labels = raw.get("labels") or []
-    if not isinstance(labels, list) or not all(isinstance(x, str) for x in labels):
-        raise ValueError("labels must be a list of strings")
+    labels = _resolve_str_list("LABELS", raw.get("labels"), default=None)
+    if labels is None:
+        raise ValueError("labels must be set via YAML or LABELS env var")
 
     log_raw = raw.get("logging", {}) or {}
     logging_cfg = LoggingConfig(
-        level=os.environ.get("LOG_LEVEL") or log_raw.get("level", "INFO"),
-        file=log_raw.get("file", "/var/log/tagarr/app.log"),
-        max_bytes=int(log_raw.get("max_bytes", 5 * 1024 * 1024)),
-        backup_count=int(log_raw.get("backup_count", 5)),
+        level=_env("LOG_LEVEL") or log_raw.get("level", "INFO"),
+        file=_env("LOG_FILE") or log_raw.get("file", "/var/log/tagarr/app.log"),
+        max_bytes=_resolve_int("LOG_MAX_BYTES", log_raw.get("max_bytes"), 5 * 1024 * 1024),
+        backup_count=_resolve_int("LOG_BACKUP_COUNT", log_raw.get("backup_count"), 5),
     )
 
     plex_cfg = None
     plex_raw = raw.get("plex", {}) or {}
-    plex_url = os.environ.get("PLEX_URL") or plex_raw.get("url")
-    plex_token = os.environ.get("PLEX_TOKEN") or plex_raw.get("token")
+    plex_url = _env("PLEX_URL") or plex_raw.get("url")
+    plex_token = _env("PLEX_TOKEN") or plex_raw.get("token")
     if plex_url and plex_token:
-        library_types = plex_raw.get("library_types") or ["movie", "show"]
-        if not isinstance(library_types, list):
-            raise ValueError("plex.library_types must be a list")
+        library_types = _resolve_str_list(
+            "PLEX_LIBRARY_TYPES",
+            plex_raw.get("library_types"),
+            default=["movie", "show"],
+        )
         plex_cfg = PlexConfig(url=plex_url, token=plex_token, library_types=library_types)
     elif plex_url or plex_token:
         raise ValueError("plex config requires both url and token")
 
     jellyfin_cfg = None
     jf_raw = raw.get("jellyfin", {}) or {}
-    jf_url = os.environ.get("JELLYFIN_URL") or jf_raw.get("url")
-    jf_api_key = os.environ.get("JELLYFIN_API_KEY") or jf_raw.get("api_key")
+    jf_url = _env("JELLYFIN_URL") or jf_raw.get("url")
+    jf_api_key = _env("JELLYFIN_API_KEY") or jf_raw.get("api_key")
     if jf_url and jf_api_key:
-        item_types = jf_raw.get("item_types") or ["Movie", "Episode", "Series"]
-        if not isinstance(item_types, list):
-            raise ValueError("jellyfin.item_types must be a list")
+        item_types = _resolve_str_list(
+            "JELLYFIN_ITEM_TYPES",
+            jf_raw.get("item_types"),
+            default=["Movie", "Episode", "Series"],
+        )
         jellyfin_cfg = JellyfinConfig(url=jf_url, api_key=jf_api_key, item_types=item_types)
     elif jf_url or jf_api_key:
         raise ValueError("jellyfin config requires both url and api_key")
@@ -82,7 +130,7 @@ def load_config(path: str | None = None) -> AppConfig:
     return AppConfig(
         labels=labels,
         logging=logging_cfg,
-        webhook_token=os.environ.get("WEBHOOK_TOKEN"),
+        webhook_token=_env("WEBHOOK_TOKEN"),
         plex=plex_cfg,
         jellyfin=jellyfin_cfg,
     )
