@@ -12,7 +12,7 @@ from app.jellyfin import apply_tags as jellyfin_apply_tags
 from app.labeler import apply_labels
 from app.logs import setup_logging
 
-log = logging.getLogger("plex-labeling")
+log = logging.getLogger("tagarr")
 
 
 def create_app():
@@ -157,7 +157,7 @@ def main():
         app, _cfg = create_app()
     except Exception:
         logging.basicConfig(level=logging.INFO)
-        logging.getLogger("plex-labeling").exception("startup failed")
+        logging.getLogger("tagarr").exception("startup failed")
         sys.exit(1)
 
     host = os.environ.get("BIND_HOST", "0.0.0.0")

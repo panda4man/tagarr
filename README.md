@@ -55,7 +55,7 @@ jellyfin:                          # remove this section if not using Jellyfin
 
 logging:
   level: INFO
-  file: /var/log/plex-labeling/app.log
+  file: /var/log/tagarr/app.log
   max_bytes: 5242880               # 5 MiB
   backup_count: 5
 ```
@@ -92,7 +92,7 @@ When `WEBHOOK_TOKEN` is set, every webhook path above gets a `/<token>` suffix.
 
 ## Logs
 
-Rotated by size to `logging.file` (`backup_count` backups kept) and also streamed to stdout so `docker logs plex-labeling` works.
+Rotated by size to `logging.file` (`backup_count` backups kept) and also streamed to stdout so `docker logs tagarr` works.
 
 ## Smoke tests without the media server adding content
 

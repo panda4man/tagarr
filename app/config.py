@@ -21,7 +21,7 @@ class JellyfinConfig:
 @dataclass
 class LoggingConfig:
     level: str = "INFO"
-    file: str = "/var/log/plex-labeling/app.log"
+    file: str = "/var/log/tagarr/app.log"
     max_bytes: int = 5 * 1024 * 1024
     backup_count: int = 5
 
@@ -47,7 +47,7 @@ def load_config(path: str | None = None) -> AppConfig:
     log_raw = raw.get("logging", {}) or {}
     logging_cfg = LoggingConfig(
         level=os.environ.get("LOG_LEVEL") or log_raw.get("level", "INFO"),
-        file=log_raw.get("file", "/var/log/plex-labeling/app.log"),
+        file=log_raw.get("file", "/var/log/tagarr/app.log"),
         max_bytes=int(log_raw.get("max_bytes", 5 * 1024 * 1024)),
         backup_count=int(log_raw.get("backup_count", 5)),
     )

@@ -1,4 +1,4 @@
-# plex-labeling — Copilot Instructions
+# tagarr — Copilot Instructions
 
 ## Project overview
 

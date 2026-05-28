@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ ./app/
 
-RUN mkdir -p /var/log/plex-labeling /config
+RUN mkdir -p /var/log/tagarr /config
 
 EXPOSE 8080
 

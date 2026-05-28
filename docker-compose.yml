@@ -1,7 +1,7 @@
 services:
-  plex-labeling:
+  tagarr:
     build: .
-    container_name: plex-labeling
+    container_name: tagarr
     restart: unless-stopped
     ports:
       - "8080:8080"
@@ -13,4 +13,4 @@ services:
       # WEBHOOK_TOKEN: "optional-shared-secret"
     volumes:
       - ./config:/config:ro
-      - ./logs:/var/log/plex-labeling
+      - ./logs:/var/log/tagarr
