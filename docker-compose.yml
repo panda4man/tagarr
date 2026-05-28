@@ -15,7 +15,7 @@ services:
       BIND_HOST: "${BIND_HOST:-0.0.0.0}"
       BIND_PORT: "${BIND_PORT:-8080}"
       # All YAML keys can be overridden via env. Uncomment to override:
-      # LABELS: '["auto-labeled","needs-review"]'
+      LABELS: "${LABELS:-}"
       # PLEX_LIBRARY_TYPES: '["movie","show"]'
       # JELLYFIN_ITEM_TYPES: '["Movie","Episode","Series"]'
       # LOG_FILE: "/var/log/tagarr/app.log"
