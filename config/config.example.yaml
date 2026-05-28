@@ -1,0 +1,17 @@
+plex:
+  url: "http://plex.local:32400"
+  token: "REPLACE_ME_OR_USE_PLEX_TOKEN_ENV"
+
+labels:
+  - "auto-labeled"
+  - "needs-review"
+
+library_types:
+  - movie
+  - show
+
+logging:
+  level: INFO
+  file: /var/log/plex-labeling/app.log
+  max_bytes: 5242880
+  backup_count: 5
