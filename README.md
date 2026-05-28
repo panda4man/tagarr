@@ -1,4 +1,4 @@
-# plex-labeling
+# Tadarr 
 
 Tiny Flask service that listens for Plex Pass webhooks and auto-applies a configured list of labels to newly added Movies and TV Shows. Labels are **merged** with existing labels — never clobbered.
 
