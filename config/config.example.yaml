@@ -1,14 +1,21 @@
-plex:
-  url: "http://plex.local:32400"
-  token: "REPLACE_ME_OR_USE_PLEX_TOKEN_ENV"
-
 labels:
   - "auto-labeled"
   - "needs-review"
 
-library_types:
-  - movie
-  - show
+plex:                              # remove this section if not using Plex
+  url: "http://plex.local:32400"
+  token: "REPLACE_ME_OR_USE_PLEX_TOKEN_ENV"
+  library_types:
+    - movie
+    - show
+
+jellyfin:                          # remove this section if not using Jellyfin
+  url: "http://jellyfin.local:8096"
+  api_key: "REPLACE_ME_OR_USE_JELLYFIN_API_KEY_ENV"
+  item_types:
+    - Movie
+    - Episode
+    - Series
 
 logging:
   level: INFO

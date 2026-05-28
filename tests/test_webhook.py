@@ -5,25 +5,45 @@ import pytest
 
 from app.main import create_app
 
-_CONFIG_YAML = """
+_PLEX_CONFIG = """
+labels:
+  - auto-labeled
 plex:
   url: http://plex.local:32400
   token: testtoken
-labels:
-  - auto-labeled
-library_types:
-  - movie
-  - show
 """
 
-_LIBRARY_NEW_MOVIE = json.dumps(
+_JELLYFIN_CONFIG = """
+labels:
+  - auto-labeled
+jellyfin:
+  url: http://jellyfin.local:8096
+  api_key: testkey
+"""
+
+_BOTH_CONFIG = """
+labels:
+  - auto-labeled
+plex:
+  url: http://plex.local:32400
+  token: testtoken
+jellyfin:
+  url: http://jellyfin.local:8096
+  api_key: testkey
+"""
+
+_PLEX_MOVIE_PAYLOAD = json.dumps(
     {"event": "library.new", "Metadata": {"librarySectionType": "movie", "ratingKey": "42"}}
 )
 
+_JF_MOVIE_PAYLOAD = json.dumps(
+    {"NotificationType": "ItemAdded", "ItemType": "Movie", "ItemId": "abc123", "Name": "The Matrix"}
+)
 
-def _build_app(tmp_path, monkeypatch, extra_env=None):
+
+def _build_app(tmp_path, monkeypatch, yaml_content, extra_env=None):
     config_path = tmp_path / "config.yaml"
-    config_path.write_text(_CONFIG_YAML)
+    config_path.write_text(yaml_content)
     monkeypatch.setenv("CONFIG_PATH", str(config_path))
     for key, val in (extra_env or {}).items():
         monkeypatch.setenv(key, val)
@@ -37,8 +57,18 @@ def _build_app(tmp_path, monkeypatch, extra_env=None):
 
 
 @pytest.fixture
-def client(tmp_path, monkeypatch):
-    return _build_app(tmp_path, monkeypatch).test_client()
+def plex_client(tmp_path, monkeypatch):
+    return _build_app(tmp_path, monkeypatch, _PLEX_CONFIG).test_client()
+
+
+@pytest.fixture
+def jf_client(tmp_path, monkeypatch):
+    return _build_app(tmp_path, monkeypatch, _JELLYFIN_CONFIG).test_client()
+
+
+@pytest.fixture
+def both_client(tmp_path, monkeypatch):
+    return _build_app(tmp_path, monkeypatch, _BOTH_CONFIG).test_client()
 
 
 # ---------------------------------------------------------------------------
@@ -46,20 +76,20 @@ def client(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_healthz_returns_ok(client):
-    resp = client.get("/healthz")
+def test_healthz_returns_ok(plex_client):
+    resp = plex_client.get("/healthz")
     assert resp.status_code == 200
     assert resp.data == b"ok"
 
 
 # ---------------------------------------------------------------------------
-# Routing / event filtering
+# Plex webhook — /webhook/plex and backward-compat /webhook
 # ---------------------------------------------------------------------------
 
 
-def test_library_new_matching_section_calls_apply_labels(client):
+def test_plex_library_new_calls_apply_labels(plex_client):
     with patch("app.main.apply_labels") as mock_apply:
-        resp = client.post("/webhook", data={"payload": _LIBRARY_NEW_MOVIE})
+        resp = plex_client.post("/webhook/plex", data={"payload": _PLEX_MOVIE_PAYLOAD})
     assert resp.status_code == 200
     mock_apply.assert_called_once()
     _, rating_key, labels = mock_apply.call_args[0]
@@ -67,60 +97,118 @@ def test_library_new_matching_section_calls_apply_labels(client):
     assert labels == ["auto-labeled"]
 
 
-def test_library_new_non_matching_section_type_ignored(client):
+def test_plex_legacy_path_still_works(plex_client):
+    with patch("app.main.apply_labels") as mock_apply:
+        resp = plex_client.post("/webhook", data={"payload": _PLEX_MOVIE_PAYLOAD})
+    assert resp.status_code == 200
+    mock_apply.assert_called_once()
+
+
+def test_plex_non_matching_section_type_ignored(plex_client):
     payload = json.dumps(
         {"event": "library.new", "Metadata": {"librarySectionType": "artist", "ratingKey": "42"}}
     )
     with patch("app.main.apply_labels") as mock_apply:
-        resp = client.post("/webhook", data={"payload": payload})
+        resp = plex_client.post("/webhook/plex", data={"payload": payload})
     assert resp.status_code == 200
     mock_apply.assert_not_called()
 
 
-def test_non_library_new_event_ignored(client):
+def test_plex_non_library_new_event_ignored(plex_client):
     payload = json.dumps(
         {"event": "media.play", "Metadata": {"librarySectionType": "movie", "ratingKey": "42"}}
     )
     with patch("app.main.apply_labels") as mock_apply:
-        resp = client.post("/webhook", data={"payload": payload})
+        resp = plex_client.post("/webhook/plex", data={"payload": payload})
     assert resp.status_code == 200
     mock_apply.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
-# Bad / missing payload
-# ---------------------------------------------------------------------------
+def test_plex_missing_payload_returns_200(plex_client):
+    assert plex_client.post("/webhook/plex", data={}).status_code == 200
 
 
-def test_missing_payload_field_returns_200(client):
-    resp = client.post("/webhook", data={})
-    assert resp.status_code == 200
+def test_plex_malformed_json_returns_200(plex_client):
+    assert plex_client.post("/webhook/plex", data={"payload": "not-json"}).status_code == 200
 
 
-def test_malformed_json_payload_returns_200(client):
-    resp = client.post("/webhook", data={"payload": "not-json"})
-    assert resp.status_code == 200
-
-
-def test_missing_rating_key_returns_200_without_apply(client):
-    payload = json.dumps(
-        {"event": "library.new", "Metadata": {"librarySectionType": "movie"}}
-    )
+def test_plex_missing_rating_key_returns_200(plex_client):
+    payload = json.dumps({"event": "library.new", "Metadata": {"librarySectionType": "movie"}})
     with patch("app.main.apply_labels") as mock_apply:
-        resp = client.post("/webhook", data={"payload": payload})
+        resp = plex_client.post("/webhook/plex", data={"payload": payload})
     assert resp.status_code == 200
     mock_apply.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
-# Exception safety
-# ---------------------------------------------------------------------------
-
-
-def test_apply_labels_exception_still_returns_200(client):
+def test_plex_apply_labels_exception_still_returns_200(plex_client):
     with patch("app.main.apply_labels", side_effect=RuntimeError("plex down")):
-        resp = client.post("/webhook", data={"payload": _LIBRARY_NEW_MOVIE})
+        assert plex_client.post("/webhook/plex", data={"payload": _PLEX_MOVIE_PAYLOAD}).status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Jellyfin webhook — /webhook/jellyfin
+# ---------------------------------------------------------------------------
+
+
+def test_jellyfin_item_added_calls_apply_tags(jf_client):
+    with patch("app.main.jellyfin_apply_tags") as mock_apply:
+        resp = jf_client.post(
+            "/webhook/jellyfin",
+            data=_JF_MOVIE_PAYLOAD,
+            content_type="application/json",
+        )
     assert resp.status_code == 200
+    mock_apply.assert_called_once()
+    _, _, item_id, tags = mock_apply.call_args[0]
+    assert item_id == "abc123"
+    assert tags == ["auto-labeled"]
+
+
+def test_jellyfin_non_matching_item_type_ignored(jf_client):
+    payload = json.dumps({"NotificationType": "ItemAdded", "ItemType": "Audio", "ItemId": "x"})
+    with patch("app.main.jellyfin_apply_tags") as mock_apply:
+        resp = jf_client.post("/webhook/jellyfin", data=payload, content_type="application/json")
+    assert resp.status_code == 200
+    mock_apply.assert_not_called()
+
+
+def test_jellyfin_non_item_added_event_ignored(jf_client):
+    payload = json.dumps({"NotificationType": "PlaybackStart", "ItemType": "Movie", "ItemId": "x"})
+    with patch("app.main.jellyfin_apply_tags") as mock_apply:
+        resp = jf_client.post("/webhook/jellyfin", data=payload, content_type="application/json")
+    assert resp.status_code == 200
+    mock_apply.assert_not_called()
+
+
+def test_jellyfin_missing_item_id_returns_200(jf_client):
+    payload = json.dumps({"NotificationType": "ItemAdded", "ItemType": "Movie"})
+    with patch("app.main.jellyfin_apply_tags") as mock_apply:
+        resp = jf_client.post("/webhook/jellyfin", data=payload, content_type="application/json")
+    assert resp.status_code == 200
+    mock_apply.assert_not_called()
+
+
+def test_jellyfin_apply_tags_exception_still_returns_200(jf_client):
+    with patch("app.main.jellyfin_apply_tags", side_effect=RuntimeError("jf down")):
+        resp = jf_client.post(
+            "/webhook/jellyfin", data=_JF_MOVIE_PAYLOAD, content_type="application/json"
+        )
+    assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Both backends registered — no route conflicts
+# ---------------------------------------------------------------------------
+
+
+def test_both_backends_independent_paths(both_client):
+    with patch("app.main.apply_labels") as mock_plex, \
+         patch("app.main.jellyfin_apply_tags") as mock_jf:
+        both_client.post("/webhook/plex", data={"payload": _PLEX_MOVIE_PAYLOAD})
+        both_client.post("/webhook/jellyfin", data=_JF_MOVIE_PAYLOAD, content_type="application/json")
+
+    mock_plex.assert_called_once()
+    mock_jf.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -128,15 +216,28 @@ def test_apply_labels_exception_still_returns_200(client):
 # ---------------------------------------------------------------------------
 
 
-def test_webhook_token_changes_path(tmp_path, monkeypatch):
-    app = _build_app(tmp_path, monkeypatch, extra_env={"WEBHOOK_TOKEN": "secret"})
+def test_webhook_token_changes_plex_path(tmp_path, monkeypatch):
+    app = _build_app(tmp_path, monkeypatch, _PLEX_CONFIG, extra_env={"WEBHOOK_TOKEN": "secret"})
     c = app.test_client()
 
-    # Original path is no longer registered
-    resp = c.post("/webhook", data={"payload": "{}"})
-    assert resp.status_code == 404
+    assert c.post("/webhook/plex", data={"payload": "{}"}).status_code == 404
+    assert c.post("/webhook", data={"payload": "{}"}).status_code == 404
 
-    # Token-guarded path works
     with patch("app.main.apply_labels"):
-        resp = c.post("/webhook/secret", data={"payload": json.dumps({"event": "other"})})
+        resp = c.post("/webhook/plex/secret", data={"payload": json.dumps({"event": "other"})})
+    assert resp.status_code == 200
+
+
+def test_webhook_token_changes_jellyfin_path(tmp_path, monkeypatch):
+    app = _build_app(tmp_path, monkeypatch, _JELLYFIN_CONFIG, extra_env={"WEBHOOK_TOKEN": "secret"})
+    c = app.test_client()
+
+    assert c.post("/webhook/jellyfin", data="{}", content_type="application/json").status_code == 404
+
+    with patch("app.main.jellyfin_apply_tags"):
+        resp = c.post(
+            "/webhook/jellyfin/secret",
+            data=json.dumps({"NotificationType": "other"}),
+            content_type="application/json",
+        )
     assert resp.status_code == 200
